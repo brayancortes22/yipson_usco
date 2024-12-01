@@ -225,6 +225,131 @@ class SistemaEventos:
             finally:
                 cursor.close()
 
+    def mostrar_gestion_usuarios(self):
+        # Limpiar ventana
+        for widget in self.ventana.winfo_children():
+            widget.destroy()
+
+        # Frame principal
+        frame_usuarios = ttk.Frame(self.ventana, padding="20")
+        frame_usuarios.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+
+        # Título
+        ttk.Label(frame_usuarios, text="Gestión de Usuarios", 
+                 font=('Helvetica', 14, 'bold')).grid(row=0, column=0, columnspan=2, pady=10)
+
+        # Frame para crear usuarios
+        frame_crear = ttk.LabelFrame(frame_usuarios, text="Crear Nuevo Usuario", padding="10")
+        frame_crear.grid(row=1, column=0, padx=5, pady=5, sticky=(tk.W, tk.E))
+
+        # Campos para nuevo usuario
+        ttk.Label(frame_crear, text="Nombre:").grid(row=0, column=0, pady=5)
+        self.nombre_usuario = ttk.Entry(frame_crear)
+        self.nombre_usuario.grid(row=0, column=1, pady=5)
+
+        ttk.Label(frame_crear, text="Correo:").grid(row=1, column=0, pady=5)
+        self.correo_usuario = ttk.Entry(frame_crear)
+        self.correo_usuario.grid(row=1, column=1, pady=5)
+
+        ttk.Label(frame_crear, text="Contraseña:").grid(row=2, column=0, pady=5)
+        self.contrasena_usuario = ttk.Entry(frame_crear, show="*")
+        self.contrasena_usuario.grid(row=2, column=1, pady=5)
+
+        ttk.Label(frame_crear, text="Rol:").grid(row=3, column=0, pady=5)
+        self.rol_usuario = ttk.Combobox(frame_crear, values=['estudiante', 'administrador'])
+        self.rol_usuario.set('estudiante')
+        self.rol_usuario.grid(row=3, column=1, pady=5)
+
+        ttk.Button(frame_crear, text="Crear Usuario", 
+                  command=self.crear_usuario).grid(row=4, column=0, columnspan=2, pady=10)
+
+        # Lista de usuarios existentes
+        frame_lista = ttk.LabelFrame(frame_usuarios, text="Usuarios Existentes", padding="10")
+        frame_lista.grid(row=1, column=1, padx=5, pady=5, sticky=(tk.W, tk.E))
+
+        # TreeView para mostrar usuarios
+        self.tree_usuarios = ttk.Treeview(frame_lista, 
+                                        columns=('ID', 'Nombre', 'Correo', 'Rol'), 
+                                        show='headings')
+        self.tree_usuarios.heading('ID', text='ID')
+        self.tree_usuarios.heading('Nombre', text='Nombre')
+        self.tree_usuarios.heading('Correo', text='Correo')
+        self.tree_usuarios.heading('Rol', text='Rol')
+        self.tree_usuarios.grid(row=0, column=0, pady=5)
+
+        # Botón para eliminar usuario seleccionado
+        ttk.Button(frame_lista, text="Eliminar Usuario", 
+                  command=self.eliminar_usuario).grid(row=1, column=0, pady=5)
+
+        # Botón para volver
+        ttk.Button(frame_usuarios, text="Volver", 
+                  command=self.mostrar_pantalla_principal).grid(row=2, column=0, columnspan=2, pady=20)
+
+        # Cargar usuarios existentes
+        self.actualizar_lista_usuarios()
+
+    def crear_usuario(self):
+        try:
+            cursor = self.db.conexion.cursor()
+            query = """
+                INSERT INTO usuarios (nombre, correo, contrasena, rol)
+                VALUES (%s, %s, %s, %s)
+            """
+            valores = (
+                self.nombre_usuario.get(),
+                self.correo_usuario.get(),
+                self.contrasena_usuario.get(),
+                self.rol_usuario.get()
+            )
+            cursor.execute(query, valores)
+            self.db.conexion.commit()
+            messagebox.showinfo("Éxito", "Usuario creado exitosamente")
+            self.actualizar_lista_usuarios()
+            
+            # Limpiar campos
+            self.nombre_usuario.delete(0, tk.END)
+            self.correo_usuario.delete(0, tk.END)
+            self.contrasena_usuario.delete(0, tk.END)
+            self.rol_usuario.set('estudiante')
+        except Exception as e:
+            messagebox.showerror("Error", f"Error al crear usuario: {e}")
+        finally:
+            cursor.close()
+
+    def actualizar_lista_usuarios(self):
+        # Limpiar lista actual
+        for item in self.tree_usuarios.get_children():
+            self.tree_usuarios.delete(item)
+        
+        try:
+            cursor = self.db.conexion.cursor()
+            cursor.execute("SELECT id, nombre, correo, rol FROM usuarios")
+            for usuario in cursor.fetchall():
+                self.tree_usuarios.insert('', 'end', values=usuario)
+        except Exception as e:
+            messagebox.showerror("Error", f"Error al cargar usuarios: {e}")
+        finally:
+            cursor.close()
+
+    def eliminar_usuario(self):
+        seleccion = self.tree_usuarios.selection()
+        if not seleccion:
+            messagebox.showwarning("Advertencia", "Por favor seleccione un usuario para eliminar")
+            return
+        
+        if messagebox.askyesno("Confirmar", "¿Está seguro de eliminar el usuario seleccionado?"):
+            try:
+                usuario_id = self.tree_usuarios.item(seleccion[0])['values'][0]
+                cursor = self.db.conexion.cursor()
+                cursor.execute("DELETE FROM usuarios WHERE id = %s", (usuario_id,))
+                self.db.conexion.commit()
+                messagebox.showinfo("Éxito", "Usuario eliminado exitosamente")
+                self.actualizar_lista_usuarios()
+            except Exception as e:
+                messagebox.showerror("Error", f"Error al eliminar usuario: {e}")
+            finally:
+                cursor.close()
+
 if __name__ == "__main__":
     app = SistemaEventos()
     app.ejecutar()

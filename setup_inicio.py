@@ -21,7 +21,7 @@ def crear_admin_default(db):
                 INSERT INTO usuarios (nombre, correo, contrasena, rol)
                 VALUES (%s, %s, %s, %s)
             """
-            valores = ('Admin', 'admin@usco.edu.co', 'admin123', 'administrador')
+            valores = ('Admin', 'bscl@usc.edu.co', 'bscl', 'administrador')
             cursor.execute(query, valores)
             db.conexion.commit()
             print("Administrador por defecto creado exitosamente")
