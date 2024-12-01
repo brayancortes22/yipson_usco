@@ -255,92 +255,105 @@ class SistemaEventos:
         ttk.Label(frame_usuarios, text="Gestión de Usuarios", 
                  font=('Helvetica', 14, 'bold')).grid(row=0, column=0, columnspan=2, pady=10)
 
-        # Frame para crear usuarios
-        frame_crear = ttk.LabelFrame(frame_usuarios, text="Crear Nuevo Usuario", padding="10")
-        frame_crear.grid(row=1, column=0, padx=5, pady=5, sticky=(tk.W, tk.E))
-
-        # Campos para nuevo usuario
-        ttk.Label(frame_crear, text="Nombre:").grid(row=0, column=0, pady=5)
-        self.nombre_usuario = ttk.Entry(frame_crear)
-        self.nombre_usuario.grid(row=0, column=1, pady=5)
-
-        ttk.Label(frame_crear, text="Correo:").grid(row=1, column=0, pady=5)
-        self.correo_usuario = ttk.Entry(frame_crear)
-        self.correo_usuario.grid(row=1, column=1, pady=5)
-
-        ttk.Label(frame_crear, text="Contraseña:").grid(row=2, column=0, pady=5)
-        self.contrasena_usuario = ttk.Entry(frame_crear, show="*")
-        self.contrasena_usuario.grid(row=2, column=1, pady=5)
-
-        ttk.Label(frame_crear, text="Rol:").grid(row=3, column=0, pady=5)
-        self.rol_usuario = ttk.Combobox(frame_crear, values=['estudiante', 'administrador'])
-        self.rol_usuario.set('estudiante')
-        self.rol_usuario.grid(row=3, column=1, pady=5)
-
-        ttk.Button(frame_crear, text="Crear Usuario", 
-                  command=self.crear_usuario).grid(row=4, column=0, columnspan=2, pady=10)
-
         # Lista de usuarios existentes
         frame_lista = ttk.LabelFrame(frame_usuarios, text="Usuarios Existentes", padding="10")
-        frame_lista.grid(row=1, column=1, padx=5, pady=5, sticky=(tk.W, tk.E))
+        frame_lista.grid(row=1, column=0, padx=5, pady=5, sticky=(tk.W, tk.E))
 
         # TreeView para mostrar usuarios
         self.tree_usuarios = ttk.Treeview(frame_lista, 
-                                        columns=('ID', 'Nombre', 'Correo', 'Rol'), 
+                                        columns=('ID', 'Nombre', 'Correo', 'Rol'),
                                         show='headings')
         self.tree_usuarios.heading('ID', text='ID')
         self.tree_usuarios.heading('Nombre', text='Nombre')
         self.tree_usuarios.heading('Correo', text='Correo')
         self.tree_usuarios.heading('Rol', text='Rol')
+        
+        # Configurar anchos de columna
+        self.tree_usuarios.column('ID', width=50)
+        self.tree_usuarios.column('Nombre', width=200)
+        self.tree_usuarios.column('Correo', width=200)
+        self.tree_usuarios.column('Rol', width=100)
+        
         self.tree_usuarios.grid(row=0, column=0, pady=5)
 
-        # Botón para eliminar usuario seleccionado
-        ttk.Button(frame_lista, text="Eliminar Usuario", 
-                  command=self.eliminar_usuario).grid(row=1, column=0, pady=5)
+        # Frame para botones
+        frame_botones = ttk.Frame(frame_lista)
+        frame_botones.grid(row=1, column=0, pady=5)
+
+        # Botones de acción
+        ttk.Button(frame_botones, text="Cambiar Rol", 
+                  command=self.cambiar_rol_usuario).grid(row=0, column=0, padx=5)
+        ttk.Button(frame_botones, text="Eliminar Usuario", 
+                  command=self.eliminar_usuario).grid(row=0, column=1, padx=5)
 
         # Botón para volver
         ttk.Button(frame_usuarios, text="Volver", 
-                  command=self.mostrar_pantalla_principal).grid(row=2, column=0, columnspan=2, pady=20)
+                  command=self.mostrar_pantalla_principal).grid(row=2, column=0, pady=20)
 
-        # Cargar usuarios existentes
-        self.actualizar_lista_usuarios()
+        # Cargar lista de usuarios
+        self.cargar_lista_usuarios()
 
-    def crear_usuario(self):
-        try:
-            cursor = self.db.conexion.cursor()
-            query = """
-                INSERT INTO usuarios (nombre, correo, contrasena, rol)
-                VALUES (%s, %s, %s, %s)
-            """
-            valores = (
-                self.nombre_usuario.get(),
-                self.correo_usuario.get(),
-                self.contrasena_usuario.get(),
-                self.rol_usuario.get()
-            )
-            cursor.execute(query, valores)
-            self.db.conexion.commit()
-            messagebox.showinfo("Éxito", "Usuario creado exitosamente")
-            self.actualizar_lista_usuarios()
-            
-            # Limpiar campos
-            self.nombre_usuario.delete(0, tk.END)
-            self.correo_usuario.delete(0, tk.END)
-            self.contrasena_usuario.delete(0, tk.END)
-            self.rol_usuario.set('estudiante')
-        except Exception as e:
-            messagebox.showerror("Error", f"Error al crear usuario: {e}")
-        finally:
-            cursor.close()
+    def cambiar_rol_usuario(self):
+        seleccion = self.tree_usuarios.selection()
+        if not seleccion:
+            messagebox.showwarning("Advertencia", "Por favor seleccione un usuario")
+            return
 
-    def actualizar_lista_usuarios(self):
+        usuario_id = self.tree_usuarios.item(seleccion[0])['values'][0]
+        rol_actual = self.tree_usuarios.item(seleccion[0])['values'][3]
+        nombre_usuario = self.tree_usuarios.item(seleccion[0])['values'][1]
+
+        # Crear ventana emergente para cambiar rol
+        ventana_rol = tk.Toplevel(self.ventana)
+        ventana_rol.title("Cambiar Rol de Usuario")
+        ventana_rol.geometry("300x200")
+
+        # Frame principal
+        frame_rol = ttk.Frame(ventana_rol, padding="20")
+        frame_rol.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+
+        # Etiqueta informativa
+        ttk.Label(frame_rol, 
+                 text=f"Usuario: {nombre_usuario}\nRol actual: {rol_actual}",
+                 justify="center").grid(row=0, column=0, columnspan=2, pady=10)
+
+        # Combobox para seleccionar nuevo rol
+        ttk.Label(frame_rol, text="Nuevo rol:").grid(row=1, column=0, pady=5)
+        nuevo_rol = ttk.Combobox(frame_rol, values=['estudiante', 'administrador'])
+        nuevo_rol.set(rol_actual)
+        nuevo_rol.grid(row=1, column=1, pady=5)
+
+        def guardar_cambio_rol():
+            try:
+                cursor = self.db.conexion.cursor()
+                cursor.execute("""
+                    UPDATE usuarios 
+                    SET rol = %s 
+                    WHERE id = %s
+                """, (nuevo_rol.get(), usuario_id))
+                self.db.conexion.commit()
+                messagebox.showinfo("Éxito", "Rol actualizado exitosamente")
+                ventana_rol.destroy()
+                self.cargar_lista_usuarios()  # Actualizar lista de usuarios
+            except Exception as e:
+                messagebox.showerror("Error", f"Error al actualizar rol: {e}")
+            finally:
+                cursor.close()
+
+        # Botones
+        ttk.Button(frame_rol, text="Guardar", 
+                  command=guardar_cambio_rol).grid(row=2, column=0, columnspan=2, pady=10)
+        ttk.Button(frame_rol, text="Cancelar", 
+                  command=ventana_rol.destroy).grid(row=3, column=0, columnspan=2, pady=5)
+
+    def cargar_lista_usuarios(self):
         # Limpiar lista actual
         for item in self.tree_usuarios.get_children():
             self.tree_usuarios.delete(item)
         
         try:
             cursor = self.db.conexion.cursor()
-            cursor.execute("SELECT id, nombre, correo, rol FROM usuarios")
+            cursor.execute("SELECT id, nombre, correo, rol FROM usuarios ORDER BY nombre")
             for usuario in cursor.fetchall():
                 self.tree_usuarios.insert('', 'end', values=usuario)
         except Exception as e:
@@ -361,7 +374,7 @@ class SistemaEventos:
                 cursor.execute("DELETE FROM usuarios WHERE id = %s", (usuario_id,))
                 self.db.conexion.commit()
                 messagebox.showinfo("Éxito", "Usuario eliminado exitosamente")
-                self.actualizar_lista_usuarios()
+                self.cargar_lista_usuarios()
             except Exception as e:
                 messagebox.showerror("Error", f"Error al eliminar usuario: {e}")
             finally:
@@ -382,7 +395,7 @@ class SistemaEventos:
 
         # TreeView para mostrar eventos
         self.tree_eventos = ttk.Treeview(frame_eventos, 
-                                       columns=('ID', 'Título', 'Fecha', 'Hora', 'Lugar', 'Categoría'),
+                                       columns=('ID', 'Título', 'Fecha', 'Hora', 'Lugar', 'Categoría', 'Estado'),
                                        show='headings')
         self.tree_eventos.heading('ID', text='ID')
         self.tree_eventos.heading('Título', text='Título')
@@ -390,6 +403,17 @@ class SistemaEventos:
         self.tree_eventos.heading('Hora', text='Hora')
         self.tree_eventos.heading('Lugar', text='Lugar')
         self.tree_eventos.heading('Categoría', text='Categoría')
+        self.tree_eventos.heading('Estado', text='Estado')
+        
+        # Configurar el ancho de las columnas
+        self.tree_eventos.column('ID', width=50)
+        self.tree_eventos.column('Título', width=200)
+        self.tree_eventos.column('Fecha', width=100)
+        self.tree_eventos.column('Hora', width=80)
+        self.tree_eventos.column('Lugar', width=150)
+        self.tree_eventos.column('Categoría', width=100)
+        self.tree_eventos.column('Estado', width=100)
+        
         self.tree_eventos.grid(row=1, column=0, pady=5)
 
         # Frame para detalles del evento
@@ -424,13 +448,43 @@ class SistemaEventos:
         
         try:
             cursor = self.db.conexion.cursor()
-            # Removemos la condición WHERE e.fecha >= CURDATE() para mostrar todos los eventos
+            # Agregamos una columna calculada para el estado del evento
             cursor.execute("""
-                SELECT e.id, e.titulo, DATE_FORMAT(e.fecha, '%Y-%m-%d') as fecha, 
-                       TIME_FORMAT(e.hora, '%H:%i') as hora, e.lugar, e.categoria 
+                SELECT 
+                    e.id, 
+                    e.titulo, 
+                    DATE_FORMAT(e.fecha, '%Y-%m-%d') as fecha, 
+                    TIME_FORMAT(e.hora, '%H:%i') as hora, 
+                    e.lugar, 
+                    e.categoria,
+                    CASE 
+                        WHEN e.fecha < CURDATE() THEN 'Caducado'
+                        WHEN e.fecha = CURDATE() THEN 'Hoy'
+                        WHEN e.fecha <= DATE_ADD(CURDATE(), INTERVAL 7 DAY) THEN 'Próximo'
+                        ELSE 'Futuro'
+                    END as estado
                 FROM eventos e 
                 ORDER BY e.fecha, e.hora
             """)
+            
+            # Actualizar la estructura del TreeView para incluir la columna de estado
+            self.tree_eventos['columns'] = ('ID', 'Título', 'Fecha', 'Hora', 'Lugar', 'Categoría', 'Estado')
+            self.tree_eventos.heading('ID', text='ID')
+            self.tree_eventos.heading('Título', text='Título')
+            self.tree_eventos.heading('Fecha', text='Fecha')
+            self.tree_eventos.heading('Hora', text='Hora')
+            self.tree_eventos.heading('Lugar', text='Lugar')
+            self.tree_eventos.heading('Categoría', text='Categoría')
+            self.tree_eventos.heading('Estado', text='Estado')
+            
+            # Configurar el ancho de las columnas
+            self.tree_eventos.column('ID', width=50)
+            self.tree_eventos.column('Título', width=200)
+            self.tree_eventos.column('Fecha', width=100)
+            self.tree_eventos.column('Hora', width=80)
+            self.tree_eventos.column('Lugar', width=150)
+            self.tree_eventos.column('Categoría', width=100)
+            self.tree_eventos.column('Estado', width=100)
             
             eventos = cursor.fetchall()
             if not eventos:
@@ -439,7 +493,25 @@ class SistemaEventos:
                 self.boton_inscribir.state(['disabled'])
             else:
                 for evento in eventos:
-                    self.tree_eventos.insert('', 'end', values=evento)
+                    # Configurar color según el estado
+                    estado = evento[6]  # El estado es el último elemento
+                    if estado == 'Caducado':
+                        tag = 'caducado'
+                    elif estado == 'Hoy':
+                        tag = 'hoy'
+                    elif estado == 'Próximo':
+                        tag = 'proximo'
+                    else:
+                        tag = 'futuro'
+                    
+                    self.tree_eventos.insert('', 'end', values=evento, tags=(tag,))
+                
+                # Configurar colores para los diferentes estados
+                self.tree_eventos.tag_configure('caducado', foreground='gray')
+                self.tree_eventos.tag_configure('hoy', foreground='green')
+                self.tree_eventos.tag_configure('proximo', foreground='blue')
+                self.tree_eventos.tag_configure('futuro', foreground='black')
+                
                 self.boton_inscribir.state(['!disabled'])
                 
             # Imprimir para debug
@@ -455,9 +527,10 @@ class SistemaEventos:
         seleccion = self.tree_eventos.selection()
         if seleccion:
             evento_id = self.tree_eventos.item(seleccion[0])['values'][0]
+            estado = self.tree_eventos.item(seleccion[0])['values'][6]  # Obtener el estado del evento
+            
             try:
                 cursor = self.db.conexion.cursor()
-                # Modificamos la consulta para obtener más detalles
                 cursor.execute("""
                     SELECT e.titulo, e.descripcion, e.fecha, e.hora, e.lugar, e.categoria
                     FROM eventos e
@@ -476,19 +549,26 @@ class SistemaEventos:
                     self.detalle_titulo.config(text=detalles)
                     self.detalle_descripcion.config(text=f"Descripción: {evento[1]}")
                     
-                    # Verificar si el usuario ya está inscrito
-                    cursor.execute("""
-                        SELECT * FROM inscripciones 
-                        WHERE evento_id = %s AND estudiante_id = %s
-                    """, (evento_id, self.usuario_actual['id']))
-                    
-                    if cursor.fetchone():
-                        self.boton_inscribir.config(text="Cancelar Inscripción")
+                    # Si el evento está caducado, deshabilitar el botón de inscripción
+                    if estado == 'Caducado':
+                        self.boton_inscribir.state(['disabled'])
+                        self.boton_inscribir.config(text="Evento Caducado")
                     else:
-                        self.boton_inscribir.config(text="Inscribirse al Evento")
+                        self.boton_inscribir.state(['!disabled'])
+                        # Verificar si el usuario ya está inscrito
+                        cursor.execute("""
+                            SELECT * FROM inscripciones 
+                            WHERE evento_id = %s AND estudiante_id = %s
+                        """, (evento_id, self.usuario_actual['id']))
+                        
+                        if cursor.fetchone():
+                            self.boton_inscribir.config(text="Cancelar Inscripción")
+                        else:
+                            self.boton_inscribir.config(text="Inscribirse al Evento")
+                            
             except Exception as e:
                 messagebox.showerror("Error", f"Error al cargar detalles: {e}")
-                print(f"Error detallado: {e}")  # Para debug
+                print(f"Error detallado: {e}")
             finally:
                 cursor.close()
 
@@ -499,6 +579,12 @@ class SistemaEventos:
             return
 
         evento_id = self.tree_eventos.item(seleccion[0])['values'][0]
+        estado = self.tree_eventos.item(seleccion[0])['values'][6]  # Obtener el estado del evento
+        
+        # Verificar si el evento está caducado
+        if estado == 'Caducado':
+            messagebox.showwarning("Advertencia", "No es posible inscribirse a eventos caducados")
+            return
         
         try:
             cursor = self.db.conexion.cursor()
