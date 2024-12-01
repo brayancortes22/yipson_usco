@@ -148,8 +148,13 @@ class SistemaEventos:
         self.categoria_evento = ttk.Entry(frame_crear)
         self.categoria_evento.grid(row=5, column=1, pady=5)
 
+        ttk.Label(frame_crear, text="Capacidad Máxima:").grid(row=6, column=0, pady=5)
+        self.capacidad_maxima = ttk.Entry(frame_crear)
+        self.capacidad_maxima.grid(row=6, column=1, pady=5)
+        self.capacidad_maxima.insert(0, "50")  # Valor por defecto
+
         ttk.Button(frame_crear, text="Crear Evento", 
-                  command=self.crear_evento).grid(row=6, column=0, columnspan=2, pady=10)
+                  command=self.crear_evento).grid(row=7, column=0, columnspan=2, pady=10)
 
         # Lista de eventos existentes
         frame_lista = ttk.LabelFrame(frame_eventos, text="Eventos Existentes", padding="10")
@@ -185,10 +190,21 @@ class SistemaEventos:
 
     def crear_evento(self):
         try:
+            # Validar que la capacidad máxima sea un número válido
+            try:
+                capacidad = int(self.capacidad_maxima.get())
+                if capacidad <= 0:
+                    messagebox.showerror("Error", "La capacidad máxima debe ser mayor a 0")
+                    return
+            except ValueError:
+                messagebox.showerror("Error", "La capacidad máxima debe ser un número válido")
+                return
+
             cursor = self.db.conexion.cursor()
             query = """
-                INSERT INTO eventos (titulo, descripcion, fecha, hora, lugar, categoria, administrador_id)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO eventos (titulo, descripcion, fecha, hora, lugar, categoria, 
+                                   administrador_id, capacidad_maxima)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             """
             valores = (
                 self.titulo_evento.get(),
@@ -197,7 +213,8 @@ class SistemaEventos:
                 self.hora_evento.get(),
                 self.lugar_evento.get(),
                 self.categoria_evento.get(),
-                self.usuario_actual['id']
+                self.usuario_actual['id'],
+                capacidad
             )
             cursor.execute(query, valores)
             self.db.conexion.commit()
@@ -243,21 +260,21 @@ class SistemaEventos:
                 cursor.close()
 
     def mostrar_gestion_usuarios(self):
-        # Limpiar ventana
-        for widget in self.ventana.winfo_children():
-            widget.destroy()
-
         # Frame principal
         frame_usuarios = ttk.Frame(self.ventana, padding="20")
         frame_usuarios.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
 
         # Título
         ttk.Label(frame_usuarios, text="Gestión de Usuarios", 
-                 font=('Helvetica', 14, 'bold')).grid(row=0, column=0, columnspan=2, pady=10)
+                 font=('Helvetica', 14, 'bold')).grid(row=0, column=0, pady=10)
+
+        # Agregar botón de registro en la parte superior
+        ttk.Button(frame_usuarios, text="Registrar Nuevo Usuario",
+                  command=self.mostrar_registro_admin).grid(row=1, column=0, pady=10)
 
         # Lista de usuarios existentes
         frame_lista = ttk.LabelFrame(frame_usuarios, text="Usuarios Existentes", padding="10")
-        frame_lista.grid(row=1, column=0, padx=5, pady=5, sticky=(tk.W, tk.E))
+        frame_lista.grid(row=2, column=0, padx=5, pady=5, sticky=(tk.W, tk.E))
 
         # TreeView para mostrar usuarios
         self.tree_usuarios = ttk.Treeview(frame_lista, 
@@ -276,7 +293,7 @@ class SistemaEventos:
         
         self.tree_usuarios.grid(row=0, column=0, pady=5)
 
-        # Frame para botones
+        # Frame para botones de acción
         frame_botones = ttk.Frame(frame_lista)
         frame_botones.grid(row=1, column=0, pady=5)
 
@@ -286,9 +303,9 @@ class SistemaEventos:
         ttk.Button(frame_botones, text="Eliminar Usuario", 
                   command=self.eliminar_usuario).grid(row=0, column=1, padx=5)
 
-        # Botón para volver
+        # Botón para volver (ahora fuera del frame_lista y al final)
         ttk.Button(frame_usuarios, text="Volver", 
-                  command=self.mostrar_pantalla_principal).grid(row=2, column=0, pady=20)
+                  command=self.mostrar_pantalla_principal).grid(row=3, column=0, pady=20)
 
         # Cargar lista de usuarios
         self.cargar_lista_usuarios()
@@ -395,7 +412,7 @@ class SistemaEventos:
 
         # TreeView para mostrar eventos
         self.tree_eventos = ttk.Treeview(frame_eventos, 
-                                       columns=('ID', 'Título', 'Fecha', 'Hora', 'Lugar', 'Categoría', 'Estado'),
+                                       columns=('ID', 'Título', 'Fecha', 'Hora', 'Lugar', 'Categoría', 'Estado', 'Cupos'),
                                        show='headings')
         self.tree_eventos.heading('ID', text='ID')
         self.tree_eventos.heading('Título', text='Título')
@@ -404,6 +421,7 @@ class SistemaEventos:
         self.tree_eventos.heading('Lugar', text='Lugar')
         self.tree_eventos.heading('Categoría', text='Categoría')
         self.tree_eventos.heading('Estado', text='Estado')
+        self.tree_eventos.heading('Cupos', text='Cupos Disponibles')
         
         # Configurar el ancho de las columnas
         self.tree_eventos.column('ID', width=50)
@@ -413,6 +431,7 @@ class SistemaEventos:
         self.tree_eventos.column('Lugar', width=150)
         self.tree_eventos.column('Categoría', width=100)
         self.tree_eventos.column('Estado', width=100)
+        self.tree_eventos.column('Cupos', width=120)
         
         self.tree_eventos.grid(row=1, column=0, pady=5)
 
@@ -448,7 +467,6 @@ class SistemaEventos:
         
         try:
             cursor = self.db.conexion.cursor()
-            # Agregamos una columna calculada para el estado del evento
             cursor.execute("""
                 SELECT 
                     e.id, 
@@ -462,29 +480,15 @@ class SistemaEventos:
                         WHEN e.fecha = CURDATE() THEN 'Hoy'
                         WHEN e.fecha <= DATE_ADD(CURDATE(), INTERVAL 7 DAY) THEN 'Próximo'
                         ELSE 'Futuro'
-                    END as estado
+                    END as estado,
+                    COALESCE(e.capacidad_maxima - COUNT(i.id), e.capacidad_maxima) as cupos_disponibles,
+                    e.capacidad_maxima as capacidad_total,
+                    COUNT(i.id) as inscritos_actuales
                 FROM eventos e 
+                LEFT JOIN inscripciones i ON e.id = i.evento_id
+                GROUP BY e.id, e.titulo, e.fecha, e.hora, e.lugar, e.categoria, e.capacidad_maxima
                 ORDER BY e.fecha, e.hora
             """)
-            
-            # Actualizar la estructura del TreeView para incluir la columna de estado
-            self.tree_eventos['columns'] = ('ID', 'Título', 'Fecha', 'Hora', 'Lugar', 'Categoría', 'Estado')
-            self.tree_eventos.heading('ID', text='ID')
-            self.tree_eventos.heading('Título', text='Título')
-            self.tree_eventos.heading('Fecha', text='Fecha')
-            self.tree_eventos.heading('Hora', text='Hora')
-            self.tree_eventos.heading('Lugar', text='Lugar')
-            self.tree_eventos.heading('Categoría', text='Categoría')
-            self.tree_eventos.heading('Estado', text='Estado')
-            
-            # Configurar el ancho de las columnas
-            self.tree_eventos.column('ID', width=50)
-            self.tree_eventos.column('Título', width=200)
-            self.tree_eventos.column('Fecha', width=100)
-            self.tree_eventos.column('Hora', width=80)
-            self.tree_eventos.column('Lugar', width=150)
-            self.tree_eventos.column('Categoría', width=100)
-            self.tree_eventos.column('Estado', width=100)
             
             eventos = cursor.fetchall()
             if not eventos:
@@ -493,8 +497,18 @@ class SistemaEventos:
                 self.boton_inscribir.state(['disabled'])
             else:
                 for evento in eventos:
+                    # Formatear el texto de cupos disponibles
+                    inscritos = evento[9]  # Índice de inscritos_actuales
+                    capacidad_total = evento[8]    # Índice de capacidad_total
+                    cupos_disponibles = capacidad_total - inscritos
+                    texto_cupos = f"{cupos_disponibles} de {capacidad_total}"
+                    
+                    # Crear lista de valores para el TreeView
+                    valores = list(evento[:7])  # Tomar todos los valores excepto los últimos
+                    valores.append(texto_cupos)  # Agregar el texto de cupos formateado
+                    
                     # Configurar color según el estado
-                    estado = evento[6]  # El estado es el último elemento
+                    estado = evento[6]
                     if estado == 'Caducado':
                         tag = 'caducado'
                     elif estado == 'Hoy':
@@ -504,19 +518,21 @@ class SistemaEventos:
                     else:
                         tag = 'futuro'
                     
-                    self.tree_eventos.insert('', 'end', values=evento, tags=(tag,))
+                    # Agregar tag adicional si no hay cupos disponibles
+                    if cupos_disponibles <= 0:
+                        tag = 'sin_cupos'
+                    
+                    self.tree_eventos.insert('', 'end', values=valores, tags=(tag,))
                 
                 # Configurar colores para los diferentes estados
                 self.tree_eventos.tag_configure('caducado', foreground='gray')
                 self.tree_eventos.tag_configure('hoy', foreground='green')
                 self.tree_eventos.tag_configure('proximo', foreground='blue')
                 self.tree_eventos.tag_configure('futuro', foreground='black')
+                self.tree_eventos.tag_configure('sin_cupos', foreground='red')
                 
                 self.boton_inscribir.state(['!disabled'])
                 
-            # Imprimir para debug
-            print("Eventos cargados:", eventos)
-            
         except Exception as e:
             messagebox.showerror("Error", f"Error al cargar eventos: {e}")
             print(f"Error detallado: {e}")
@@ -579,15 +595,15 @@ class SistemaEventos:
             return
 
         evento_id = self.tree_eventos.item(seleccion[0])['values'][0]
-        estado = self.tree_eventos.item(seleccion[0])['values'][6]  # Obtener el estado del evento
+        estado = self.tree_eventos.item(seleccion[0])['values'][6]
         
-        # Verificar si el evento está caducado
         if estado == 'Caducado':
             messagebox.showwarning("Advertencia", "No es posible inscribirse a eventos caducados")
             return
         
         try:
             cursor = self.db.conexion.cursor()
+            
             # Verificar si ya está inscrito
             cursor.execute("""
                 SELECT * FROM inscripciones 
@@ -605,6 +621,23 @@ class SistemaEventos:
                 messagebox.showinfo("Éxito", "Inscripción cancelada exitosamente")
                 self.boton_inscribir.config(text="Inscribirse al Evento")
             else:
+                # Verificar capacidad máxima
+                cursor.execute("""
+                    SELECT e.capacidad_maxima, COUNT(i.id) as inscritos
+                    FROM eventos e
+                    LEFT JOIN inscripciones i ON e.id = i.evento_id
+                    WHERE e.id = %s
+                    GROUP BY e.id, e.capacidad_maxima
+                """, (evento_id,))
+                
+                resultado = cursor.fetchone()
+                if resultado:
+                    capacidad_maxima, inscritos = resultado
+                    if inscritos >= capacidad_maxima:
+                        messagebox.showwarning("Advertencia", 
+                                             "El evento ha alcanzado su capacidad máxima")
+                        return
+                
                 # Realizar inscripción
                 cursor.execute("""
                     INSERT INTO inscripciones (evento_id, estudiante_id)
@@ -614,6 +647,8 @@ class SistemaEventos:
                 self.boton_inscribir.config(text="Cancelar Inscripción")
             
             self.db.conexion.commit()
+            # Actualizar la lista de eventos para reflejar el cambio en los cupos
+            self.cargar_eventos_disponibles()
         except Exception as e:
             messagebox.showerror("Error", f"Error en la inscripción: {e}")
         finally:
@@ -834,6 +869,96 @@ class SistemaEventos:
             messagebox.showerror("Error", f"Error al registrar: {e}")
         finally:
             cursor.close()
+
+    def mostrar_registro_admin(self):
+        # Crear ventana emergente
+        ventana_registro = tk.Toplevel(self.ventana)
+        ventana_registro.title("Registrar Nuevo Usuario")
+        ventana_registro.geometry("400x500")
+
+        # Frame principal
+        frame_registro = ttk.Frame(ventana_registro, padding="20")
+        frame_registro.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+
+        # Título
+        ttk.Label(frame_registro, text="Registro de Usuario", 
+                 font=('Helvetica', 14, 'bold')).grid(row=0, column=0, columnspan=2, pady=10)
+
+        # Campos de registro
+        ttk.Label(frame_registro, text="Nombre completo:").grid(row=1, column=0, pady=5)
+        registro_nombre = ttk.Entry(frame_registro)
+        registro_nombre.grid(row=1, column=1, pady=5)
+
+        ttk.Label(frame_registro, text="Correo electrónico:").grid(row=2, column=0, pady=5)
+        registro_correo = ttk.Entry(frame_registro)
+        registro_correo.grid(row=2, column=1, pady=5)
+
+        ttk.Label(frame_registro, text="Contraseña:").grid(row=3, column=0, pady=5)
+        registro_contrasena = ttk.Entry(frame_registro, show="*")
+        registro_contrasena.grid(row=3, column=1, pady=5)
+
+        ttk.Label(frame_registro, text="Rol:").grid(row=4, column=0, pady=5)
+        registro_rol = ttk.Combobox(frame_registro, values=['estudiante', 'administrador'])
+        registro_rol.set('estudiante')
+        registro_rol.grid(row=4, column=1, pady=5)
+
+        def registrar():
+            # Obtener valores de los campos
+            nombre = registro_nombre.get().strip()
+            correo = registro_correo.get().strip()
+            contrasena = registro_contrasena.get().strip()
+            rol = registro_rol.get().strip()
+
+            # Validar que todos los campos estén llenos
+            if not nombre:
+                messagebox.showerror("Error", "El nombre es obligatorio")
+                return
+            if not correo:
+                messagebox.showerror("Error", "El correo es obligatorio")
+                return
+            if not contrasena:
+                messagebox.showerror("Error", "La contraseña es obligatoria")
+                return
+            if not rol:
+                messagebox.showerror("Error", "Debe seleccionar un rol")
+                return
+
+            # Validar formato de correo
+            if '@' not in correo:
+                messagebox.showerror("Error", "El formato del correo electrónico no es válido")
+                return
+
+            try:
+                cursor = self.db.conexion.cursor()
+                
+                # Verificar si el correo ya existe
+                cursor.execute("SELECT id FROM usuarios WHERE correo = %s", (correo,))
+                if cursor.fetchone():
+                    messagebox.showerror("Error", "Este correo ya está registrado")
+                    return
+
+                # Insertar nuevo usuario
+                query = """
+                    INSERT INTO usuarios (nombre, correo, contrasena, rol)
+                    VALUES (%s, %s, %s, %s)
+                """
+                cursor.execute(query, (nombre, correo, contrasena, rol))
+                self.db.conexion.commit()
+                
+                messagebox.showinfo("Éxito", "Usuario registrado exitosamente")
+                ventana_registro.destroy()
+                self.cargar_lista_usuarios()  # Actualizar lista
+                
+            except Exception as e:
+                messagebox.showerror("Error", f"Error al registrar: {e}")
+            finally:
+                cursor.close()
+
+        # Botones
+        ttk.Button(frame_registro, text="Registrar", 
+                  command=registrar).grid(row=5, column=0, columnspan=2, pady=10)
+        ttk.Button(frame_registro, text="Cancelar", 
+                  command=ventana_registro.destroy).grid(row=6, column=0, columnspan=2, pady=5)
 
 if __name__ == "__main__":
     app = SistemaEventos()
